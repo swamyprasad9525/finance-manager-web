@@ -1,55 +1,28 @@
-// src/middleware.ts
-import arcjet, { createMiddleware, detectBot, shield } from "@arcjet/next";
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
-
-// Define which routes require authentication
-const isProtectedRoute = createRouteMatcher([
-  "/dashboard(.*)",
-  "/account(.*)",
-  "/transaction(.*)",
-]);
+// src/middleware.js
+import arcjet, { detectBot, shield, createMiddleware as createArcjetMiddleware } from "@arcjet/next";
+import { clerkMiddleware } from "@clerk/nextjs/server";
 
 // Arcjet setup
 const aj = arcjet({
   key: process.env.ARCJET_KEY,
   rules: [
     shield({ mode: "LIVE" }),
-    detectBot({
-      mode: "LIVE",
-      allow: ["CATEGORY:SEARCH_ENGINE", "GO_HTTP"],
-    }),
+    detectBot({ mode: "LIVE", allow: ["CATEGORY:SEARCH_ENGINE", "GO_HTTP"] }),
   ],
 });
 
 // Clerk setup
 const clerk = clerkMiddleware({
-  publicRoutes: ["/sign-in", "/sign-up", "/"], // Routes that don’t need auth
+  publicRoutes: ["/sign-in", "/sign-up", "/"],
 });
 
-// Export the middleware
-export default async function middleware(req: Request) {
-  // Run Arcjet first
-  const arcjetResp = await aj(req);
-  if (arcjetResp) return arcjetResp;
+// Chain Arcjet and Clerk middlewares
+export default createArcjetMiddleware(aj, clerk);
 
-  // Then Clerk
-  const clerkResp = await clerk(req);
-
-  // If route is protected and user is not signed in, redirect
-  if (isProtectedRoute(req) && !clerkResp) {
-    return NextResponse.redirect(new URL("/sign-in", req.url));
-  }
-
-  return clerkResp ?? NextResponse.next();
-}
-
-// Middleware matcher: include all protected pages and API routes
+// Middleware matcher
 export const config = {
   matcher: [
-    "/dashboard(.*)",
-    "/account(.*)",
-    "/transaction(.*)",
+    "/((?!_next/static|_next/image|favicon.ico).*)",
     "/api(.*)",
   ],
 };
